@@ -75,11 +75,10 @@ function formatOpenCodeProbeError(input: {
   const lower = detail?.toLowerCase() ?? "";
 
   if (input.isExternalServer) {
+    // Bare auth-code digits can be part of the endpoint's port or path.
     if (
-      lower.includes("401") ||
-      lower.includes("403") ||
-      lower.includes("unauthorized") ||
-      lower.includes("forbidden")
+      /(?:^|\s)(?:status[=:]\s*|http(?:\/\d(?:\.\d)?)?\s+)(?:401|403)\b/.test(lower) ||
+      /\b(?:unauthorized|forbidden)\b/.test(lower)
     ) {
       return {
         installed: true,

@@ -776,6 +776,44 @@ it.layer(layerTest)("checkOpenCodeProviderStatus", (it) => {
 });
 
 it.layer(layerTest)("checkOpenCodeProviderStatus with configured server URL", (it) => {
+  it.effect.each([
+    "401 Unauthorized",
+    "403 Forbidden",
+    "status=401 body={}",
+    "status=403 body={}",
+    "HTTP 401",
+    "HTTP/1.1 403",
+  ])("keeps explicit authentication rejection actionable: %s", (detail) =>
+    Effect.gen(function* () {
+      runtimeMock.state.connectionError = new Error(detail);
+      const snapshot = yield* checkProvider(
+        makeOpenCodeSettings({ serverUrl: "http://127.0.0.1:9999" }),
+      );
+
+      NodeAssert.equal(snapshot.status, "error");
+      NodeAssert.equal(snapshot.auth.status, "unauthenticated");
+      NodeAssert.equal(
+        snapshot.message,
+        "OpenCode server rejected authentication. Check the server URL and password.",
+      );
+    }),
+  );
+
+  it.effect.each([401, 403, 4010, 4030])("keeps connection failures on port %s retryable", (port) =>
+    Effect.gen(function* () {
+      const serverUrl = `http://127.0.0.1:${port}`;
+      runtimeMock.state.connectionError = new Error(`connect ECONNREFUSED 127.0.0.1:${port}`);
+      const snapshot = yield* checkProvider(makeOpenCodeSettings({ serverUrl }));
+
+      NodeAssert.equal(snapshot.status, "error");
+      NodeAssert.equal(snapshot.auth.status, "unknown");
+      NodeAssert.equal(
+        snapshot.message,
+        `Couldn't reach the configured OpenCode server at ${serverUrl}. Check that the server is running and the URL is correct.`,
+      );
+    }),
+  );
+
   it.effect("routes a configured OpenCode 2 server to the 2.x check, never via 1.x", () =>
     Effect.gen(function* () {
       const settings = makeOpenCodeSettings({
