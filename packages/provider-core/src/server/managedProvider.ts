@@ -51,7 +51,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     readonly publishSnapshot: (snapshot: ServerProvider) => Effect.Effect<void>;
   }) => Effect.Effect<void>;
   readonly refreshInterval?: Duration.Input;
-  readonly refreshOnInterval?: boolean;
+  readonly refreshOnInterval?: boolean | ((snapshot: ServerProvider) => boolean);
   readonly checkProviderOnSettingsChange?: (previous: Settings, next: Settings) => boolean;
 }): Effect.fn.Return<
   ManagedServerProvider,
@@ -226,8 +226,14 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     return yield* applySnapshot(nextSettings, { forceRefresh: true });
   });
 
-  const hasProviderStatusDemand = Effect.gen(function* () {
+  const shouldRefreshOnInterval = Effect.gen(function* () {
     const state = yield* Ref.get(snapshotStateRef);
+    if (
+      input.refreshOnInterval === false ||
+      (typeof input.refreshOnInterval === "function" && !input.refreshOnInterval(state.snapshot))
+    ) {
+      return false;
+    }
     const instanceId = state.snapshot.instanceId;
     const [genericDemand, instanceDemand] = yield* Effect.all([
       host.shouldRunBackgroundWork({ type: "provider-status" }),
@@ -279,10 +285,8 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
           Queue.take(refreshIntervalChanges).pipe(Effect.as(false)),
         ).pipe(
           Effect.flatMap((intervalElapsed) =>
-            input.refreshOnInterval !== false &&
-            intervalElapsed &&
-            Duration.toMillis(Duration.fromInputUnsafe(refreshInterval)) > 0
-              ? hasProviderStatusDemand.pipe(
+            intervalElapsed && Duration.toMillis(Duration.fromInputUnsafe(refreshInterval)) > 0
+              ? shouldRefreshOnInterval.pipe(
                   Effect.flatMap((shouldRefresh) =>
                     shouldRefresh ? refreshSnapshot().pipe(Effect.asVoid) : Effect.void,
                   ),

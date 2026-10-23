@@ -458,7 +458,14 @@ export const OpenCodeDriver: ProviderDriver<
           streamSettings: snapshotSettings.streamSettings,
           haveSettingsChanged: haveProviderSnapshotSettingsChanged,
           checkProviderOnSettingsChange: () => false,
-          refreshOnInterval: false,
+          // A failed or still-loading catalog must recover without a manual
+          // refresh. Healthy instances need no recurring server starts.
+          refreshOnInterval: (snapshot) =>
+            snapshot.enabled &&
+            snapshot.installed &&
+            snapshot.version !== null &&
+            snapshot.status !== "ready" &&
+            snapshot.auth.status === "unknown",
           initialSnapshot: (settings) =>
             makePendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
           checkProvider,
