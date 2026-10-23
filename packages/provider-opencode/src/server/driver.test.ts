@@ -99,8 +99,8 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
   );
 
-  it.effect.each(["error", "empty"] as const)(
-    "recovers an %s model catalog without a manual refresh",
+  it.effect.each(["probe", "error", "empty"] as const)(
+    "recovers discovery without a manual refresh after %s",
     (initialCatalog) =>
       Effect.gen(function* () {
         const releaseCatalog = yield* Deferred.make<void>();
@@ -142,6 +142,16 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
         const replay = replayOpenCodeServer(replies, "secret");
         const server = HttpClient.make((request) =>
           Effect.gen(function* () {
+            if (initialCatalog === "probe" && !catalogAvailable) {
+              yield* Deferred.await(releaseCatalog);
+              return HttpClientResponse.fromWeb(
+                request,
+                new Response('{"_tag":"InternalServerError","message":"server starting"}', {
+                  status: 503,
+                  headers: { "content-type": "application/json" },
+                }),
+              );
+            }
             if (new URL(request.url).pathname === "/api/model") {
               modelReads += 1;
               yield* Deferred.await(releaseCatalog);
@@ -171,7 +181,7 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
           Stream.filter(
             (snapshot) =>
               snapshot.installed &&
-              snapshot.status === (initialCatalog === "error" ? "error" : "warning"),
+              snapshot.status === (initialCatalog === "empty" ? "warning" : "error"),
           ),
           Stream.take(1),
           Stream.runCollect,
@@ -183,6 +193,7 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
         const [failed] = Array.from(yield* Fiber.join(initial));
         assert.strictEqual(failed?.auth.status, "unknown");
         assert.deepStrictEqual(failed?.models, []);
+        if (initialCatalog === "probe") assert.strictEqual(failed?.version, null);
 
         catalogAvailable = true;
         const recovered = yield* instance.snapshot.streamChanges.pipe(
@@ -192,6 +203,7 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
           Effect.forkChild,
         );
         yield* TestClock.adjust("5 minutes");
+        assert.strictEqual((yield* instance.snapshot.getSnapshot).status, "ready");
         const [ready] = Array.from(yield* Fiber.join(recovered));
         assert.strictEqual(ready?.auth.status, "authenticated");
         assert.deepStrictEqual(
@@ -229,6 +241,7 @@ it.layer(layer)("OpenCodeDriver runtime selection", (it) => {
       yield* Deferred.succeed(releaseResponse, undefined);
       const [snapshot] = Array.from(yield* Fiber.join(rejected));
       assert.strictEqual(snapshot?.version, null);
+      assert.strictEqual(snapshot?.auth.status, "unauthenticated");
       const readsAfterRejection = requested.length;
 
       yield* TestClock.adjust("15 minutes");

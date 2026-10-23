@@ -66,7 +66,11 @@ function formatOpenCodeProbeError(input: {
   readonly isExternalServer: boolean;
   readonly phase: "version" | "inventory";
   readonly serverUrl: string;
-}): { readonly installed: boolean; readonly message: string } {
+}): {
+  readonly installed: boolean;
+  readonly message: string;
+  readonly authStatus?: "unauthenticated";
+} {
   const detail = normalizedErrorMessage(input.cause);
   const lower = detail?.toLowerCase() ?? "";
 
@@ -79,6 +83,7 @@ function formatOpenCodeProbeError(input: {
     ) {
       return {
         installed: true,
+        authStatus: "unauthenticated",
         message: "OpenCode server rejected authentication. Check the server URL and password.",
       };
     }
@@ -680,7 +685,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
         installed: failure.installed,
         version,
         status: "error",
-        auth: { status: "unknown" },
+        auth: { status: failure.authStatus ?? "unknown" },
         message: failure.message,
       },
     });

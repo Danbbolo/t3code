@@ -445,7 +445,6 @@ export const OpenCodeDriver: ProviderDriver<
       refreshOnInterval: (snapshot) =>
         snapshot.enabled &&
         snapshot.installed &&
-        snapshot.version !== null &&
         snapshot.status !== "ready" &&
         snapshot.auth.status === "unknown",
       initialSnapshot: (settings) =>
