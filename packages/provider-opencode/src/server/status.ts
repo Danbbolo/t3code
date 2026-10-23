@@ -787,13 +787,15 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     };
   }
 
+  const inventoryModels = flattenOpenCodeModels(inventoryExit.value);
   const models = providerModelsFromSettings(
-    flattenOpenCodeModels(inventoryExit.value),
+    inventoryModels,
     customModels,
     DEFAULT_OPENCODE_MODEL_CAPABILITIES,
   );
   const skills = openCodeSkillsToServerProviderSkills(inventoryExit.value.skills);
   const connectedCount = inventoryExit.value.providerList.connected.length;
+  const catalogReady = connectedCount > 0 && inventoryModels.length > 0;
   return {
     ...buildServerProvider({
       presentation: OPENCODE_PRESENTATION,
@@ -805,17 +807,19 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
       probe: {
         installed: true,
         version,
-        status: connectedCount > 0 ? "ready" : "warning",
+        status: catalogReady ? "ready" : "warning",
         auth: {
-          status: connectedCount > 0 ? "authenticated" : "unknown",
+          status: catalogReady ? "authenticated" : "unknown",
           type: "opencode",
         },
         message:
-          connectedCount > 0
-            ? `${connectedCount} upstream provider${connectedCount === 1 ? "" : "s"} connected through ${isExternalServer ? "the configured OpenCode server" : "OpenCode"}.`
-            : isExternalServer
-              ? "Connected to the configured OpenCode server, but it did not report any connected upstream providers."
-              : "OpenCode is available, but it did not report any connected upstream providers.",
+          connectedCount > 0 && !catalogReady
+            ? "OpenCode upstream providers are connected, but it did not list any models yet."
+            : connectedCount > 0
+              ? `${connectedCount} upstream provider${connectedCount === 1 ? "" : "s"} connected through ${isExternalServer ? "the configured OpenCode server" : "OpenCode"}.`
+              : isExternalServer
+                ? "Connected to the configured OpenCode server, but it did not report any connected upstream providers."
+                : "OpenCode is available, but it did not report any connected upstream providers.",
       },
     }),
     ...installedVersion,

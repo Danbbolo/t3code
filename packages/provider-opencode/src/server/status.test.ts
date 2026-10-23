@@ -462,6 +462,33 @@ const checkProvider = Effect.fn("checkProvider")(function* (
 });
 
 it.layer(layerTest)("checkOpenCodeProviderStatus", (it) => {
+  it.effect("keeps an empty legacy catalog retryable until connected providers list models", () =>
+    Effect.gen(function* () {
+      const upstream = { id: "openai", name: "OpenAI", models: {} };
+      runtimeMock.state.inventory = {
+        providerList: { connected: ["openai"], all: [upstream], default: {} },
+        agents: [],
+        skills: [],
+      };
+      const settings = makeOpenCodeSettings();
+      const empty = yield* checkProvider(settings);
+      NodeAssert.equal(empty.status, "warning");
+      NodeAssert.equal(empty.auth.status, "unknown");
+      NodeAssert.deepEqual(empty.models, []);
+
+      upstream.models = {
+        "gpt-5.4": { id: "gpt-5.4", name: "GPT-5.4", variants: {} },
+      };
+      const ready = yield* checkProvider(settings);
+      NodeAssert.equal(ready.status, "ready");
+      NodeAssert.equal(ready.auth.status, "authenticated");
+      NodeAssert.deepEqual(
+        ready.models.map((model) => model.slug),
+        ["openai/gpt-5.4"],
+      );
+    }),
+  );
+
   it.effect("emits OpenCode variant defaults so trait picker can resolve a visible selection", () =>
     Effect.gen(function* () {
       runtimeMock.state.inventory = {
