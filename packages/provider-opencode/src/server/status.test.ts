@@ -810,6 +810,10 @@ it.layer(layerTest)("checkOpenCodeProviderStatus with configured server URL", (i
     "status=403 body={}",
     "HTTP 401",
     "HTTP/1.1 403",
+    "Response status code: 401",
+    "Response status code: 403",
+    "Request failed with status code 401",
+    "Request failed with status code 403",
   ])("keeps explicit authentication rejection actionable: %s", (detail) =>
     Effect.gen(function* () {
       runtimeMock.state.connectionError = new Error(detail);
